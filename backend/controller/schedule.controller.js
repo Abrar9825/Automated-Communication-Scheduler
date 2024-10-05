@@ -12,7 +12,7 @@ const twilioPhoneNumber = process.env.TWILIO_PHONE_NUMBER;
 
 const messageAttempts = new Map();
 
-const handleCall = async (number, message) => {
+const handleCall = async (number, message, scheduleId) => {
     try {
         const call = await client.calls.create({
             to: number,
@@ -26,7 +26,7 @@ const handleCall = async (number, message) => {
                 const callInfo = await client.calls(call.sid).fetch();
                 console.log('Call Status:', callInfo.status);
                 const updateStatus = callInfo.status === 'completed' ? 'completed' : 'pending';
-                await ScheduleData.findOneAndUpdate({ number: number }, { status: updateStatus });
+                await ScheduleData.findByIdAndUpdate(scheduleId, { status: updateStatus });
                 console.log(`Call status updated to: ${updateStatus}`);
             } catch (err) {
                 console.error('Error fetching call status:', err);
@@ -37,7 +37,7 @@ const handleCall = async (number, message) => {
     }
 };
 
-const handleSMS = async (number, message) => {
+const handleSMS = async (number, message, scheduleId) => {
     try {
         const messageInfo = await client.messages.create({
             to: number,
@@ -45,18 +45,20 @@ const handleSMS = async (number, message) => {
             body: message
         });
         console.log(`SMS sent with SID: ${messageInfo.sid}`);
-        await ScheduleData.findOneAndUpdate({ number: number }, { status: 'completed' });
+
+        // Update status to 'completed' using scheduleId
+        await ScheduleData.findByIdAndUpdate(scheduleId, { status: 'completed' });
         console.log(`SMS status updated to: completed`);
     } catch (err) {
         console.error('Error sending SMS:', err);
-        // No change to status here; it remains as 'pending'
-        await ScheduleData.findOneAndUpdate({ number: number }, { status: 'pending' });
+        // Update status as pending if there was an error
+        await ScheduleData.findByIdAndUpdate(scheduleId, { status: 'pending' });
     }
 };
 
-const handleMessage = async (type, number, message) => {
+const handleMessage = async (type, number, message, scheduleId) => {
     console.log(`Handling message of type: ${type} for number: ${number}`);
-    
+
     if (!messageAttempts.has(number)) {
         messageAttempts.set(number, new Set());
     }
@@ -65,9 +67,9 @@ const handleMessage = async (type, number, message) => {
     if (!messageTypes.has(type)) {
         messageTypes.add(type);
         if (type === 'call') {
-            await handleCall(number, message);
+            await handleCall(number, message, scheduleId); // Pass the scheduleId
         } else if (type === 'sms') {
-            await handleSMS(number, message);
+            await handleSMS(number, message, scheduleId); // Pass the scheduleId
         }
     } else {
         console.log(`Message of type ${type} already scheduled for number: ${number}`);
@@ -80,17 +82,17 @@ export const createTask = async (req, res) => {
         return res.status(400).json({ success: false, message: "Please provide all fields" });
     }
 
-    console.log(`Scheduling ${type}: ${message} for ${number} at ${dateAndTime} `);
+    console.log(`Scheduling ${type}: ${message} for ${number} at ${dateAndTime}`);
 
     const newSchedule = new ScheduleData({ dateAndTime, message, number, type, status: 'pending' });
     try {
         await newSchedule.save();
-        
+
         // Schedule the message
         const scheduledDate = new Date(dateAndTime);
         schedule.scheduleJob(scheduledDate, () => {
             console.log(`Executing scheduled task for: ${message} to ${number} type ${type}`);
-            handleMessage(type, number, message);
+            handleMessage(type, number, message, newSchedule._id); // Pass the scheduleId
         });
 
         return res.status(201).json({ success: true, message: "Your task is scheduled" });
@@ -112,14 +114,34 @@ export const getTask = async (req, res) => {
 
 export const updateTask = async (req, res) => {
     const { id } = req.params;
-    const schedule = req.body;
+    const updatedFields = req.body;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
         return res.status(404).json({ success: false, message: "Invalid task ID" });
     }
 
     try {
-        const updatedSchedule = await ScheduleData.findByIdAndUpdate(id, schedule, { new: true });
+        const existingSchedule = await ScheduleData.findById(id);
+
+        if (!existingSchedule) {
+            return res.status(404).json({ success: false, message: "Task not found" });
+        }
+
+        console.log("Updating schedule with fields:", updatedFields);
+
+        const updatedSchedule = await ScheduleData.findByIdAndUpdate(id, {
+            ...existingSchedule.toObject(),
+            ...updatedFields
+        }, { new: true });
+
+        if (updatedFields.dateAndTime) {
+            const scheduledDate = new Date(updatedFields.dateAndTime);
+            schedule.scheduleJob(scheduledDate, () => {
+                console.log(`Executing rescheduled task for: ${updatedSchedule.message} to ${updatedSchedule.number} of type ${updatedSchedule.type}`);
+                handleMessage(updatedSchedule.type, updatedSchedule.number, updatedSchedule.message, updatedSchedule._id); 
+            });
+        }
+
         return res.status(200).json({ success: true, data: updatedSchedule });
     } catch (error) {
         console.error("Error updating task: ", error);
