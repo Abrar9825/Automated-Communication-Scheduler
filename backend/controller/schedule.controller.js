@@ -12,6 +12,26 @@ const twilioPhoneNumber = process.env.TWILIO_PHONE_NUMBER;
 
 const messageAttempts = new Map();
 
+const handleMessage = async (type, number, message, scheduleId) => {
+    console.log(`Handling message of type: ${type} for number: ${number}`);
+
+    if (!messageAttempts.has(number)) {
+        messageAttempts.set(number, new Set());
+    }
+    const messageTypes = messageAttempts.get(number);
+
+    if (!messageTypes.has(type)) {
+        messageTypes.add(type);
+        if (type === 'call') {
+            await handleCall(number, message, scheduleId); // Pass the scheduleId
+        } else if (type === 'sms') {
+            await handleSMS(number, message, scheduleId); // Pass the scheduleId
+        }
+    } else {
+        console.log(`Message of type ${type} already scheduled for number: ${number}`);
+    }
+};
+
 const handleCall = async (number, message, scheduleId) => {
     try {
         const call = await client.calls.create({
@@ -53,26 +73,6 @@ const handleSMS = async (number, message, scheduleId) => {
         console.error('Error sending SMS:', err);
         // Update status as pending if there was an error
         await ScheduleData.findByIdAndUpdate(scheduleId, { status: 'pending' });
-    }
-};
-
-const handleMessage = async (type, number, message, scheduleId) => {
-    console.log(`Handling message of type: ${type} for number: ${number}`);
-
-    if (!messageAttempts.has(number)) {
-        messageAttempts.set(number, new Set());
-    }
-    const messageTypes = messageAttempts.get(number);
-
-    if (!messageTypes.has(type)) {
-        messageTypes.add(type);
-        if (type === 'call') {
-            await handleCall(number, message, scheduleId); // Pass the scheduleId
-        } else if (type === 'sms') {
-            await handleSMS(number, message, scheduleId); // Pass the scheduleId
-        }
-    } else {
-        console.log(`Message of type ${type} already scheduled for number: ${number}`);
     }
 };
 
@@ -138,7 +138,7 @@ export const updateTask = async (req, res) => {
             const scheduledDate = new Date(updatedFields.dateAndTime);
             schedule.scheduleJob(scheduledDate, () => {
                 console.log(`Executing rescheduled task for: ${updatedSchedule.message} to ${updatedSchedule.number} of type ${updatedSchedule.type}`);
-                handleMessage(updatedSchedule.type, updatedSchedule.number, updatedSchedule.message, updatedSchedule._id); 
+                handleMessage(updatedSchedule.type, updatedSchedule.number, updatedSchedule.message, updatedSchedule._id);
             });
         }
 
