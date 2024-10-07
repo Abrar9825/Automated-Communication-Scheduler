@@ -4,7 +4,7 @@ import { useTaskStore } from '../store/task';
 
 function TaskForm() {
     const { createTask } = useTaskStore();
-    
+
     const [newTask, setNewTask] = useState({
         dateAndTime: '',
         message: '',
@@ -26,6 +26,8 @@ function TaskForm() {
         const { success, message } = await createTask(newTask);
         console.log("success", success);
         console.log("message", message);
+        alert("Task Created successfully")
+
 
         // Reset form after submission
         setNewTask({
@@ -37,7 +39,7 @@ function TaskForm() {
     };
 
     return (
-        <Container sx={{ backgroundColor: '#e1e5f2', padding: '20px', borderRadius: '8px',marginTop:'10px' }}>
+        <Container sx={{ backgroundColor: '#e1e5f2', padding: '20px', borderRadius: '8px', marginTop: '10px' }}>
             <Typography variant="h4" gutterBottom style={{ color: '#022b3a', textAlign: 'center' }}>
                 Create New Task
             </Typography>

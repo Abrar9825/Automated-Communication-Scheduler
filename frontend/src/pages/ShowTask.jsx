@@ -65,7 +65,7 @@ const ShowTask = () => {
     const { success, message } = await updateTask(updatedTask._id, updatedData);
     console.log(success ? "Updated" : "Failed to update", message);
     handleClose(); // Close the modal after submission
-    alert("TAsk Updated")
+    alert("Task Updated successfully")
   };
 
   const handleDeleteTask = async (tid) => {
@@ -77,6 +77,8 @@ const ShowTask = () => {
       console.log("Task is not deleted");
     } else {
       console.log("Deleted");
+      alert("Task Deleted successfully")
+
     }
   };
 
