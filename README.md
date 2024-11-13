@@ -1,4 +1,3 @@
----
 
 # 📞 **AutoCall & SMS** - Automate Your Calls & Messages | Built with MERN
 
