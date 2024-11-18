@@ -77,7 +77,7 @@ const ShowTask = () => {
       console.log("Task is not deleted");
     } else {
       console.log("Deleted");
-      alert("Task Deleted successfully")
+      alert("You Are Going Delete A Task")
 
     }
   };
